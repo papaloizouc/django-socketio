@@ -1,9 +1,7 @@
-
-from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import get_object_or_404, render, redirect
-from django_socketio import broadcast, broadcast_channel, NoSocket
 
 from chat.models import ChatRoom
+from chat.sockets import ChatNamespace
 
 
 def rooms(request, template="rooms.html"):
@@ -34,19 +32,23 @@ def create(request):
     return redirect(rooms)
 
 
-@user_passes_test(lambda user: user.is_staff)
-def system_message(request, template="system_message.html"):
-    context = {"rooms": ChatRoom.objects.all()}
-    if request.method == "POST":
-        room = request.POST["room"]
-        data = {"action": "system", "message": request.POST["message"]}
-        try:
-            if room:
-                broadcast_channel(data, channel="room-" + room)
-            else:
-                broadcast(data)
-        except NoSocket, e:
-            context["message"] = e
-        else:
-            context["message"] = "Message sent"
-    return render(request, template, context)
+# @user_passes_test(lambda user: user.is_staff)
+# def system_message(request, template="system_message.html"):
+#     context = {"rooms": ChatRoom.objects.all()}
+#     if request.method == "POST":
+#         room = request.POST["room"]
+#         data = {"action": "system", "message": request.POST["message"]}
+#         try:
+#             if room:
+#                 broadcast_channel(data, channel="room-" + room)
+#             else:
+#                 broadcast(data)
+#         except NoSocket, e:
+#             context["message"] = e
+#         else:
+#             context["message"] = "Message sent"
+#     return render(request, template, context)
+# from socketio import socketio_manage
+
+# from django.http import HttpResponse
+# from django.contrib.auth.decorators import user_passes_test

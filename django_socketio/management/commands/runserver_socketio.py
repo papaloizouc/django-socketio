@@ -15,7 +15,7 @@ try:
 except ImportError:
     from socketio.server import SocketIOServer
 
-from django_socketio.clients import client_end_all
+from django.utils import six
 from django_socketio.settings import HOST, PORT
 
 
@@ -43,31 +43,34 @@ class Command(BaseCommand):
                                    'or address:port pair.' % addrport)
             self.addr, _, _, _, self.port = m.groups()
 
-        # Make the port available here for the path:
-        #   socketio_tags.socketio ->
-        #   socketio_scripts.html ->
-        #   io.Socket JS constructor
-        # allowing the port to be set as the client-side default there.
-        environ["DJANGO_SOCKETIO_PORT"] = str(self.port)
+        environ['DJANGO_SOCKETIO_PORT'] = str(self.port)
 
-        start_new_thread(reload_watcher, ())
+        if options.get('use_psyco'):
+            try:
+                from psycogreen.gevent import patch_psycopg
+            except ImportError:
+                raise CommandError(
+                    'Could not patch psycopg. '
+                    'Is psycogreen installed?')
+            patch_psycopg()
+
+        if options.get('use_reloader'):
+            start_new_thread(reload_watcher, ())
+
         try:
             bind = (self.addr, int(self.port))
-            print
-            print "SocketIOServer running on %s:%s" % bind
-            print
+            print 'SocketIOServer running on %s:%s\n\n' % bind
             handler = self.get_handler(*args, **options)
-            server = SocketIOServer(bind, handler, resource="socket.io")
+            server = SocketIOServer(
+                bind, handler, resource='socket.io', policy_server=True)
             server.serve_forever()
         except KeyboardInterrupt:
-            client_end_all()
+            for key, sock in six.iteritems(server.sockets):
+                sock.kill(detach=True)
+            server.stop()
             if RELOAD:
-                server.kill()
-                print
-                print "Reloading..."
+                print 'Reloading...\n\n'
                 restart_with_reloader()
-            else:
-                raise
 
     def get_handler(self, *args, **options):
         """
@@ -78,7 +81,7 @@ class Command(BaseCommand):
             from django.contrib.staticfiles.handlers import StaticFilesHandler
         except ImportError:
             return handler
-        use_static_handler = options.get('use_static_handler', True)
+        use_static_handler = options.get('use_static_handler')
         insecure_serving = options.get('insecure_serving', False)
         if (settings.DEBUG and use_static_handler or
                 (use_static_handler and insecure_serving)):
